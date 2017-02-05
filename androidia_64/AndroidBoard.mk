@@ -25,8 +25,7 @@ KERNEL_NAME := bzImage
 # Set the output for the kernel build products.
 KERNEL_OUT := $(abspath $(TARGET_OUT_INTERMEDIATES)/kernel)
 KERNEL_BIN := $(KERNEL_OUT)/arch/$(TARGET_KERNEL_ARCH)/boot/$(KERNEL_NAME)
-
-KERNELRELEASE = $(shell cat $(KERNEL_OUT)/include/config/kernel.release)
+KERNEL_MODULES_INSTALL := $(TARGET_OUT)/lib/modules
 
 build_kernel := $(MAKE) -C $(TARGET_KERNEL_SRC) \
 		O=$(KERNEL_OUT) \
@@ -34,8 +33,7 @@ build_kernel := $(MAKE) -C $(TARGET_KERNEL_SRC) \
 		CROSS_COMPILE="$(KERNEL_CROSS_COMPILE_WRAPPER)" \
 		KCFLAGS="$(KERNEL_CFLAGS)" \
 		KAFLAGS="$(KERNEL_AFLAGS)" \
-		$(if $(SHOW_COMMANDS),V=1) \
-		INSTALL_MOD_PATH=$(abspath $(TARGET_OUT))
+		$(if $(SHOW_COMMANDS),V=1)
 
 KERNEL_CONFIG_FILE := device/intel/android_ia/kernel_config/$(TARGET_KERNEL_CONFIG)
 
@@ -49,17 +47,24 @@ $(PRODUCT_OUT)/kernel: $(KERNEL_CONFIG) | $(ACP)
 	$(build_kernel) $(KERNEL_NAME)
 	$(hide) $(ACP) -fp $(KERNEL_BIN) $@
 
+$(KERNEL_MODULES_INSTALL): $(PRODUCT_OUT)/kernel
+	# Since there may be no modules built, at least create the empty dir.
+	mkdir -p $@
+
 installclean: FILES += $(KERNEL_OUT) $(PRODUCT_OUT)/kernel
 
 .PHONY: kernel
 kernel: $(PRODUCT_OUT)/kernel
 
+# Makes sure any built modules will be included in the system image build.
+ALL_DEFAULT_INSTALLED_MODULES += $(KERNEL_MODULES_INSTALL)
+
 #Firmware
-SYMLINKS := $(subst $(FIRMWARES_DIR),$(TARGET_OUT)/etc/firmware,$(filter-out $(FIRMWARES_DIR)/$(FIRMWARE_FILTERS),$(shell find $(FIRMWARES_DIR) -type l)))
+SYMLINKS := $(subst $(FIRMWARES_DIR),$(PRODUCT_OUT)/system/vendor/firmware,$(filter-out $(FIRMWARES_DIR)/$(FIRMWARE_FILTERS),$(shell find $(FIRMWARES_DIR) -type l)))
 
 $(SYMLINKS): FW_PATH := $(FIRMWARES_DIR)
 $(SYMLINKS):
-	@link_to=`readlink $(subst $(TARGET_OUT)/etc/firmware,$(FW_PATH),$@)`; \
+	@link_to=`readlink $(subst $(PRODUCT_OUT)/system/vendor/firmware,$(FW_PATH),$@)`; \
 	echo "Symlink: $@ -> $$link_to"; \
 	mkdir -p $(@D); ln -sf $$link_to $@
 
